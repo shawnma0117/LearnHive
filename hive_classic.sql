@@ -183,3 +183,26 @@ select campaign,user_pin,count(distinct imp_id) as imp_cnt from
 union all 
 select user_pin,user_id,imp_id,campaign from ads_inno.shawn_intel_global_imp where user_pin not in ('','nobody')
 ) c group by campaign,user_pin
+
+--- copy schema from existing table 
+create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
+
+
+
+-- 修改列名，只能一列一列来
+-- ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
+alter table shawn_mars CHANGE COLUMN idfa_md5 device_type INT;
+
+
+-- 删除特定行的数据,用insert overwrite实现
+insert overwrite table shawn_milka_imp_freq select * from shawn_milka_imp_freq where pin !=''
+
+
+-- 导出数据到本地文件系统。 但只能指定一个路径，无法指定名称。
+-- 这样就不用退出hive环境了。
+insert overwrite local directory '/home/wyp/wyp'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY','
+select * from wyp;
+
+-- 随机抽样数据，而不是仅仅展现前几条
+select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2
