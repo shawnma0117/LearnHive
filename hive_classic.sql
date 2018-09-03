@@ -1,20 +1,59 @@
----DDL 
+--- command line tool
 use ads_inno;
 show tables;
 show partitions ad.ad_base_impression partition(hour='00',pb='rtb');
+desc formatted tablename; -- 查看建表信息
+hive -e "xxxx" > ~/shawnma/nuts/nuts_ord.txt
+quit; --退出session
+dfs -ls path;  -- 查看hdfs路径
+dfs -lsr path; -- 递归查看
+dfs -du hdfs://BJYZH3-HD-JRJT-4137.jd.com:54310/user/jrjt/warehouse/stage.db/s_h02_click_log; --查看表文件大小
+dfs -get /user/jrjt/warehouse/ods.db/o_h02_click_log_i_new/dt=2014-01-21/000212_0 /home/jrjt/testan/; --下载文件到某个目录
 
 -- 建表，导数据
 -------------------------从hdfs导入---------------------------------
-hive -e "select b.* from ads_inno.temp_nuts_pin a inner join (select parent_sale_ord_id, user_log_acct, sale_ord_dt, item_sku_id, item_name, brandname, brand_cd, item_first_cate_cd,item_first_cate_name, item_second_cate_cd, item_second_cate_name, item_third_cate_cd, item_third_cate_name, sale_qtty, before_prefr_amount, after_prefr_amount, dp,dt from gdm.gdm_m04_ord_det_sum where sale_ord_valid_flag='1' and sale_ord_dt>='2017-01-24' and sale_ord_dt <='2017-07-23' and dt>='2017-01-24') b on a.user_log_acct=b.user_log_acct" > ~/shawnma/nuts/nuts_ord.txt
-
 create table if not exists ads_inno.temp_nuts_pin
 (
   user_log_acct  string  comment 'jd pin' 
 )row format delimited fields terminated by '\t' lines terminated by '\n';
 
 load data inpath 'hdfs://ns3/user/jd_ad/ads_inno/shawnma/nuts/ordpin.txt' into table temp_nuts_pin;
+-------------------本地数据导入-----------------------------------
+create table if not exists tmp_imp_sample
+(
+  pt string,
+  pos_id int,
+  ad_plan_id bigint,
+  advertise_pin string,
+  advertiser_id bigint,
+  advertiser_type int,
+  user_pin string,
+  user_ip string,
+  impress_time timestamp
+)row format delimited fields terminated by '\t' lines terminated by '\n';
 
------ 建外表，指定location
+load data local inpath '/home/ads_inno/shawnma/heinz/impression_smpl.txt' into table tmp_imp_sample; 
+
+-------------------query别的表，用insert into保存中间结果 ------------------------------
+create table if not exists tmp_imp_sample_rtb
+(
+  pos_id int,
+  ad_plan_id bigint,
+  advertise_pin string,
+  advertiser_id bigint,
+  advertiser_type int,
+  user_pin string,
+  user_ip string,
+  impress_time timestamp,
+  mobile_type int,
+  device_id string,
+  device_type int
+)row format delimited fields terminated by '\t' lines terminated by '\n';
+
+insert into table tmp_imp_sample_rtb
+select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,user_ip,from_unixtime(impress_time), mobile_type, device_id,device_type from ad.ad_base_impression TABLESAMPLE(0.01 PERCENT) s where business_type=64 and dt='2017-08-16' and pt='rtb';
+
+---------------------创建外表，指定location
 create external table if not exists shawn_milka_clk_withpin
 (
   campaignid              bigint ,                                     
@@ -45,41 +84,6 @@ partitioned by (dt string)
 row format delimited fields terminated by '\t' 
 lines terminated by '\n';
 
--------------------本地数据导入-----------------------------------
-create table if not exists tmp_imp_sample
-(
-  pt string,
-  pos_id int,
-  ad_plan_id bigint,
-  advertise_pin string,
-  advertiser_id bigint,
-  advertiser_type int,
-  user_pin string,
-  user_ip string,
-  impress_time timestamp
-)row format delimited fields terminated by '\t' lines terminated by '\n';
-
-load data local inpath '/home/ads_inno/shawnma/heinz/impression_smpl.txt' into table tmp_imp_sample; 
-
-
--------------------query别的表，用insert into保存中间结果 ------------------------------
-create table if not exists tmp_imp_sample_rtb
-(
-  pos_id int,
-  ad_plan_id bigint,
-  advertise_pin string,
-  advertiser_id bigint,
-  advertiser_type int,
-  user_pin string,
-  user_ip string,
-  impress_time timestamp,
-  mobile_type int,
-  device_id string,
-  device_type int
-)row format delimited fields terminated by '\t' lines terminated by '\n';
-
-insert into table tmp_imp_sample_rtb
-select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,user_ip,from_unixtime(impress_time), mobile_type, device_id,device_type from ad.ad_base_impression TABLESAMPLE(0.01 PERCENT) s where business_type=64 and dt='2017-08-16' and pt='rtb';
 
 ----------------------创建ORC压缩表-----------------------
  CREATE TABLE if not exists daysOnHandTableWarehouse_sample (
@@ -87,36 +91,14 @@ select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,
             dim_subd_name                  string      COMMENT     '分公司维名称',
             dim_delv_center_name           string      COMMENT     '配送中心维名称',
             delv_center_num                string      COMMENT     '配送中心编号',
-            item_sku_id                    string      COMMENT     '商品SKU编号',
-            organization                   string      COMMENT     '品牌全名称',
-            sku_name                       string      COMMENT     'Sku名称',
-            list_price                     double      COMMENT     '进货价',
-            sale_qtty                      bigint      COMMENT     '销售数量',
-            sale_qtty_7d                   bigint      COMMENT     '最近7天销售数量',
-            sale_qtty_14d                  bigint      COMMENT     '最近14天销售数量',
-            sale_qtty_28d                  bigint      COMMENT     '最近28天销售数量',
-            brandname                      string      COMMENT     '品牌名称',
-            custom_cate                    string      COMMENT     'sku对应的类目',
-            in_transit_qtty                double      COMMENT     '在途数量',
-            sale_reserve_qtty              double      COMMENT     '销售预定数量',
-            stock_qtty                     double      COMMENT     '库存数量',
-            daysOnHand_7d                  double      COMMENT     '最近7日DOH',
-            daysOnHand_14d                 double      COMMENT     '最近14日DOH',
-            daysOnHand_28d                 double      COMMENT     '最近28日DOH',
-            link                           string      COMMENT     '商品商详页连接',
-            stock_value                    double      COMMENT     '库存价值',
-            sales_contribution             double      COMMENT     '单仓收入占比',
-            daysOnHandBucket_7d            string      COMMENT     '最近7日DOH区间',
-            daysOnHandBucket_14d           string      COMMENT     '最近14日DOH区间',
-            daysOnHandBucket_28d           string      COMMENT     '最近28日DOH区间',
-            percent_stock                  double      COMMENT     '单仓库存价值占比'
+            item_sku_id                    string      COMMENT     '商品SKU编号'
         )
-        COMMENT '联合利华库存大表sample'
-        PARTITIONED BY ( dt string )
-        ROW FORMAT DELIMITED
-        FIELDS TERMINATED BY '\t'
-        stored as orc
-        LOCATION 'hdfs://ns3/user/jd_ad/ads_polaris/daysOnHandTableWarehouse_sample';
+COMMENT '联合利华库存大表sample'
+PARTITIONED BY ( dt string )
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+stored as orc
+LOCATION 'hdfs://ns3/user/jd_ad/ads_polaris/daysOnHandTableWarehouse_sample';
 
 ----------------------create table as select -----------------------
 CREATE TABLE IF NOT EXISTS blift_impress AS 
@@ -135,7 +117,7 @@ CREATE TABLE IF NOT EXISTS blift_impress AS
             and dt >= '2017-08-15'
             and dt <= '2017-10-02';
 
---添加UDF function
+-----------------------添加UDF function
 add jar /software/udf/UDFUnionAll.jar;
 create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 
