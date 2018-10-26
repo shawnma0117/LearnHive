@@ -197,6 +197,19 @@ create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
 
 -- ROW_NUMBER
--- FIRST_VALUE
+select
+	item_third_cate_cd,
+	item_third_cate_name,
+	sales,
+	row_number() over(partition by item_third_cate_cd order by sales desc) rank
+from
+	gdm.gdm_m03_item_sku_da
+group by
+	item_third_cate_cd,
+	item_third_cate_name,
+	item_sku_id
+-- FIRST_VALUE, LAST_VALUE
 -- NTILE
+
+-- 
                                                          
