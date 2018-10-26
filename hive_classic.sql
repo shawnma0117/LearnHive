@@ -1,4 +1,4 @@
---- command line tool
+-----------------------------------------0、命令行工具-----------------------------------------
 use ads_inno;
 show tables;
 show partitions ad.ad_base_impression partition(hour='00',pb='rtb');
@@ -10,15 +10,15 @@ dfs -lsr path; -- 递归查看
 dfs -du hdfs://BJYZH3-HD-JRJT-4137.jd.com:54310/user/jrjt/warehouse/stage.db/s_h02_click_log; --查看表文件大小
 dfs -get /user/jrjt/warehouse/ods.db/o_h02_click_log_i_new/dt=2014-01-21/000212_0 /home/jrjt/testan/; --下载文件到某个目录
 
--- 建表，导数据
--------------------------从hdfs导入---------------------------------
+-----------------------------------------1、建表,DDL,数据导入-------------------------------------------
+--【从hdfs导入】
 create table if not exists ads_inno.temp_nuts_pin
 (
   user_log_acct  string  comment 'jd pin' 
 )row format delimited fields terminated by '\t' lines terminated by '\n';
 
 load data inpath 'hdfs://ns3/user/jd_ad/ads_inno/shawnma/nuts/ordpin.txt' into table temp_nuts_pin;
--------------------本地数据导入-----------------------------------
+--【导入本地数据】
 create table if not exists tmp_imp_sample
 (
   pt string,
@@ -34,7 +34,7 @@ create table if not exists tmp_imp_sample
 
 load data local inpath '/home/ads_inno/shawnma/heinz/impression_smpl.txt' into table tmp_imp_sample; 
 
--------------------query别的表，用insert into保存中间结果 ------------------------------
+--【insert into】
 create table if not exists tmp_imp_sample_rtb
 (
   pos_id int,
@@ -51,9 +51,10 @@ create table if not exists tmp_imp_sample_rtb
 )row format delimited fields terminated by '\t' lines terminated by '\n';
 
 insert into table tmp_imp_sample_rtb
-select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,user_ip,from_unixtime(impress_time), mobile_type, device_id,device_type from ad.ad_base_impression TABLESAMPLE(0.01 PERCENT) s where business_type=64 and dt='2017-08-16' and pt='rtb';
+select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,user_ip,from_unixtime(impress_time), mobile_type, device_id,device_type 
+from ad.ad_base_impression TABLESAMPLE(0.01 PERCENT) s where business_type=64 and dt='2017-08-16' and pt='rtb';
 
----------------------创建外表，指定location
+--【创建外表，指定location为hdfs地址】
 create external table if not exists shawn_milka_clk_withpin
 (
   campaignid              bigint ,                                     
@@ -70,7 +71,7 @@ create external table if not exists shawn_milka_clk_withpin
 row format delimited fields terminated by '\t' lines terminated by '\n'
 LOCATION 'hdfs://ns1018/user/jd_ad/ads_inno/ads_inno.db/shawn_milka_clk_withpin';
 
--------------------------创建分区表----------------------------------
+--【创建分区表】
 create table if not exists shawn_buffalo_test
 (
   user_pin string,
@@ -85,7 +86,7 @@ row format delimited fields terminated by '\t'
 lines terminated by '\n';
 
 
-----------------------创建ORC压缩表-----------------------
+--【创建ORC压缩表】
  CREATE TABLE if not exists daysOnHandTableWarehouse_sample (
             dim_subd_num                   string      COMMENT     '分公司维编号',
             dim_subd_name                  string      COMMENT     '分公司维名称',
@@ -100,12 +101,12 @@ FIELDS TERMINATED BY '\t'
 stored as orc
 LOCATION 'hdfs://ns3/user/jd_ad/ads_polaris/daysOnHandTableWarehouse_sample';
 
-----------------------create table as select -----------------------
+-- 【create table as select】
 CREATE TABLE IF NOT EXISTS blift_impress AS 
     select
             user_pin   ,
-            user_id    , -- browser id, pc only
-            device_id  , -- mobile only
+            user_id    ,
+            device_id  ,
             device_type,
             from_unixtime(impress_time) as imp_ymdhms
     from
@@ -117,49 +118,33 @@ CREATE TABLE IF NOT EXISTS blift_impress AS
             and dt >= '2017-08-15'
             and dt <= '2017-10-02';
 
------------------------添加UDF function
-add jar /software/udf/UDFUnionAll.jar;
-create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 
---------------------b表的结果覆盖a表的结果--------------------
+-- 【覆盖原来的结果】
 insert overwrite table a
 select * from b distribute by user_pin,device_type sort by device_type asc,updatetime desc;
 
---------------------以第一个人群包为基准，看里面的人是否也在其他四个人群包中，交上的打标为1，没交上的打标为0
---step 1
-create table if not exists shawn_qm_phone2pin_ext (user_pin string comment '用户pin') row format delimited fields terminated by '\t' lines terminated by '\n';
 
-load data local inpath '/home/ads_inno/shawnma/quanmian/qm_feb/qm_phone2pin_ext20' into table shawn_qm_phone2pin_ext;
-
-create table if not exists female (user_pin string comment '用户pin') row format delimited fields terminated by '\t' lines terminated by '\n';
-
-create table if not exists jiaju (user_pin string comment '用户pin') row format delimited fields terminated by '\t' lines terminated by '\n';
-
-create table if not exists muyin (user_pin string comment '用户pin') row format delimited fields terminated by '\t' lines terminated by '\n';
-
-create table if not exists related_brd (user_pin string comment '用户pin') row format delimited fields terminated by '\t' lines terminated by '\n';
-
-load data local inpath '/home/ads_inno/shawnma/quanmian/qm_feb/female.txt' into table female;
-load data local inpath '/home/ads_inno/shawnma/quanmian/qm_feb/jiaju' into table jiaju;
-load data local inpath '/home/ads_inno/shawnma/quanmian/qm_feb/muyin' into table muyin;
-load data local inpath '/home/ads_inno/shawnma/quanmian/qm_feb/related_brd' into table related_brd;
---step2: 增加列
+-- 【增加列】
 alter table shawn_qm_phone2pin_ext add columns(
 is_female smallint,
 is_jiaju smallint,
 is_muyin smallint,
 is_related_brd smallint);
 
---step3: 超过三个表的left join & case when
-insert overwrite table shawn_qm_phone2pin_ext 
-select a.user_pin,(case when b.user_pin is not null then 1 else 0 end) as is_female, (case when c.user_pin is not null then 1 else 0 end) as is_jiaju, (case when d.user_pin is not null then 1 else 0 end) as is_muyin,(case when e.user_pin is not null then 1 else 0 end) as is_related_brd from shawn_qm_phone2pin_ext a left join female b on a.user_pin=b.user_pin left join jiaju c on a.user_pin=c.user_pin left join muyin d on a.user_pin=d.user_pin left join related_brd e on a.user_pin=e.user_pin;
 
-
---------multi-insert-----
---------适用于：从同一个数据源，根据不同条件，插入到同个结果表的不同分区，或是不同表中。
+--【multi-insert】
+----适用于：从同一个数据源，根据不同条件，插入到同个结果表的不同分区，或是不同表中。
 use ads_inno;
 create table if not EXISTS shawn_intel_global_imp (
-   user_pin string,user_id string,device_id string,device_type int ,mobile_type int,imp_id string,impress_time int,ad_plan_id string,dt string
+    user_pin string,
+    user_id string,
+    device_id string,
+    device_type int ,
+    mobile_type int,
+    imp_id string,
+    impress_time int,
+    ad_plan_id string,
+    dt string
 )
 partitioned by (campaign string)
 row format delimited 
@@ -169,10 +154,12 @@ lines terminated by '\n';
 from ad.ad_waidan_impression
 insert overwrite table ads_inno.shawn_intel_global_imp 
 partition (campaign='bts')
-  select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt where advertise_pin='OMD-Beijing' and dt>='2017-08-20' and dt<='2017-09-05' and (user_id !='' OR user_pin !='') and ad_plan_id in (105569750,105780504) and is_bill != '1'
+  select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt 
+  where advertise_pin='OMD-Beijing' and dt>='2017-08-20' and dt<='2017-09-05' and (user_id !='' OR user_pin !='') and ad_plan_id in (105569750,105780504) and is_bill != '1'
 insert overwrite table ads_inno.shawn_intel_global_imp 
 partition (campaign='nov')
-  select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt where advertise_pin='OMD-Beijing' and dt>='2017-11-01' and dt<='2017-11-20' and (user_id !='' OR user_pin !='') and ad_plan_id in (108364794,108527561) and is_bill != '1'
+  select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt 
+  where advertise_pin='OMD-Beijing' and dt>='2017-11-01' and dt<='2017-11-20' and (user_id !='' OR user_pin !='') and ad_plan_id in (108364794,108527561) and is_bill != '1'
 
 ----- map side join---
 set hive.auto.convert.join = true ;
@@ -187,7 +174,8 @@ select user_pin,user_id,imp_id,campaign from ads_inno.shawn_intel_global_imp whe
 --- copy schema from existing table 
 create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
 
-
+                                                                              
+-----------------------------------------2、Data Manipulation-------------------------------------------
 
 -- 修改列名，只能一列一列来
 -- ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
@@ -204,5 +192,13 @@ insert overwrite local directory '/home/wyp/wyp'
 ROW FORMAT DELIMITED FIELDS TERMINATED BY','
 select * from wyp;
 
+
+
+--2、函数
+-- 添加UDF
+add jar /software/udf/UDFUnionAll.jar;
+create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
+
 -- 随机抽样数据，而不是仅仅展现前几条
-select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2
+select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
+                                                         
