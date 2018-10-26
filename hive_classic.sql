@@ -54,6 +54,23 @@ insert into table tmp_imp_sample_rtb
 select pos_id,ad_plan_id,advertise_pin,advertiser_id, advertiser_type, user_pin,user_ip,from_unixtime(impress_time), mobile_type, device_id,device_type 
 from ad.ad_base_impression TABLESAMPLE(0.01 PERCENT) s where business_type=64 and dt='2017-08-16' and pt='rtb';
 
+-- 【create table as select】
+CREATE TABLE IF NOT EXISTS blift_impress AS 
+    select
+            user_pin   ,
+            user_id    ,
+            device_id  ,
+            device_type,
+            from_unixtime(impress_time) as imp_ymdhms
+    from
+            ad.ad_waidan_impression
+    where
+            advertiser_id = 629155
+            and ad_plan_id in(105070068, 105092551) 
+            and dmp_id in (436183,436184,498928,531667,523542)
+            and dt >= '2017-08-15'
+            and dt <= '2017-10-02';
+			
 --【创建外表，指定location为hdfs地址】
 create external table if not exists shawn_milka_clk_withpin
 (
@@ -101,28 +118,16 @@ FIELDS TERMINATED BY '\t'
 stored as orc
 LOCATION 'hdfs://ns3/user/jd_ad/ads_polaris/daysOnHandTableWarehouse_sample';
 
--- 【create table as select】
-CREATE TABLE IF NOT EXISTS blift_impress AS 
-    select
-            user_pin   ,
-            user_id    ,
-            device_id  ,
-            device_type,
-            from_unixtime(impress_time) as imp_ymdhms
-    from
-            ad.ad_waidan_impression
-    where
-            advertiser_id = 629155
-            and ad_plan_id in(105070068, 105092551) 
-            and dmp_id in (436183,436184,498928,531667,523542)
-            and dt >= '2017-08-15'
-            and dt <= '2017-10-02';
 
+-- 【copy schema from existing table】
+create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
 
--- 【覆盖原来的结果】
-insert overwrite table a
-select * from b distribute by user_pin,device_type sort by device_type asc,updatetime desc;
+                                                                              
+-----------------------------------------2、Data Manipulation-------------------------------------------
 
+-- 【修改列名】只能一列一列来
+ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
+alter table shawn_mars CHANGE COLUMN idfa_md5 device_type INT;
 
 -- 【增加列】
 alter table shawn_qm_phone2pin_ext add columns(
@@ -131,6 +136,29 @@ is_jiaju smallint,
 is_muyin smallint,
 is_related_brd smallint);
 
+
+-- 【覆盖原来的结果】
+insert overwrite table a
+select * from b distribute by user_pin,device_type sort by device_type asc,updatetime desc;
+
+-- 删除符合某些条件的数据,用insert overwrite实现
+insert overwrite table shawn_milka_imp_freq 
+select * from shawn_milka_imp_freq where pin !='';
+
+-- 不退出hive环境，导出数据到本地文件系统 
+-- 但只能指定一个路径，无法指定名称。
+insert overwrite local directory '/home/wyp/wyp'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY','
+select * from wyp;
+
+-- 【map side join】
+set hive.auto.convert.join = true ;
+
+select campaign,user_pin,count(distinct imp_id) as imp_cnt from 
+(select /*+MAPJOIN(b)*/ b.pin as user_pin,a.user_id,a.imp_id,a.campaign from (select * from ads_inno.shawn_intel_global_imp where user_pin in ('','nobody')) a JOIN (select uuid,pin from app.app_uuid_pin_mapping where dt='2017-12-20') b on a.user_id=b.uuid
+union all 
+select user_pin,user_id,imp_id,campaign from ads_inno.shawn_intel_global_imp where user_pin not in ('','nobody')
+) c group by campaign,user_pin
 
 --【multi-insert】
 ----适用于：从同一个数据源，根据不同条件，插入到同个结果表的不同分区，或是不同表中。
@@ -152,53 +180,23 @@ fields terminated by '\t'
 lines terminated by '\n';
 
 from ad.ad_waidan_impression
-insert overwrite table ads_inno.shawn_intel_global_imp 
-partition (campaign='bts')
+insert overwrite table ads_inno.shawn_intel_global_imp partition (campaign='bts')
   select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt 
   where advertise_pin='OMD-Beijing' and dt>='2017-08-20' and dt<='2017-09-05' and (user_id !='' OR user_pin !='') and ad_plan_id in (105569750,105780504) and is_bill != '1'
-insert overwrite table ads_inno.shawn_intel_global_imp 
-partition (campaign='nov')
+insert overwrite table ads_inno.shawn_intel_global_imp partition (campaign='nov')
   select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt 
   where advertise_pin='OMD-Beijing' and dt>='2017-11-01' and dt<='2017-11-20' and (user_id !='' OR user_pin !='') and ad_plan_id in (108364794,108527561) and is_bill != '1'
 
------ map side join---
-set hive.auto.convert.join = true ;
 
-create table ads_inno.shawn_intel_global_imp_cnt AS
-select campaign,user_pin,count(distinct imp_id) as imp_cnt from 
-(select /*+MAPJOIN(b)*/ b.pin as user_pin,a.user_id,a.imp_id,a.campaign from (select * from ads_inno.shawn_intel_global_imp where user_pin in ('','nobody')) a JOIN (select uuid,pin from app.app_uuid_pin_mapping where dt='2017-12-20') b on a.user_id=b.uuid
-union all 
-select user_pin,user_id,imp_id,campaign from ads_inno.shawn_intel_global_imp where user_pin not in ('','nobody')
-) c group by campaign,user_pin
-
---- copy schema from existing table 
-create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
-
-                                                                              
------------------------------------------2、Data Manipulation-------------------------------------------
-
--- 修改列名，只能一列一列来
--- ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
-alter table shawn_mars CHANGE COLUMN idfa_md5 device_type INT;
-
-
--- 删除特定行的数据,用insert overwrite实现
-insert overwrite table shawn_milka_imp_freq select * from shawn_milka_imp_freq where pin !=''
-
-
--- 导出数据到本地文件系统。 但只能指定一个路径，无法指定名称。
--- 这样就不用退出hive环境了。
-insert overwrite local directory '/home/wyp/wyp'
-ROW FORMAT DELIMITED FIELDS TERMINATED BY','
-select * from wyp;
-
-
-
---2、函数
+-------------------------------------------3、函数-------------------------------------------
 -- 添加UDF
 add jar /software/udf/UDFUnionAll.jar;
 create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 
--- 随机抽样数据，而不是仅仅展现前几条
+-- 随机抽样数据
 select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
+
+-- ROW_NUMBER
+-- FIRST_VALUE
+-- NTILE
                                                          
