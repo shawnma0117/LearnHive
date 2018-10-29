@@ -196,17 +196,24 @@ create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 -- 随机抽样数据
 select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
 
--- ROW_NUMBER
+-- ROW_NUMBER: 每一个打一个递增行号
+-- DENSE_RANK: 遇到并列的时候，不留空档序号，如1，2，2，3
+-- RANK: 遇到并列的时候，留空档序号，如1，2，2，4
 select
 	item_third_cate_cd,
 	item_third_cate_name,
 	sales,
-	row_number() over(partition by item_third_cate_cd order by sales desc) rank
+	row_number() over(partition by item_third_cate_cd order by sales desc) as rank
 from
-	gdm.gdm_m03_item_sku_da
+	gdm.gdm_m03_item_sku_da;
+
+rank() over(partition by item_third_cate_cd order by sales desc) rank;
+dense_rank() over(partition by item_third_cate_cd order by sales desc) rank;
+
+
+-- NTILE
 
 -- FIRST_VALUE, LAST_VALUE
--- NTILE
 
 -- 
                                                          
