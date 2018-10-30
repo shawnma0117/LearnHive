@@ -204,6 +204,8 @@ select * from (select var, rand(123) as rd from table_a ) table_b where rd betwe
 																			  
 
 ----------------------------------------3.2.窗口分析-------------------------------------------
+作用是能够做移动窗口的分析，比如三天内下单金额的平均值。 
+注意：over()不会做任何aggregation，行数与原始table一致。
 function() over(partition by col order by col_val)  -- 指定分组字段
 function() over(order by col_val desc);   -- 省略partition，就不做分组
 -- ROW_NUMBER: 每一个行打一个递增行号，如1，2，3，4
@@ -217,14 +219,21 @@ from
 
 -- RANK: 遇到并列的时候，留空档序号，如1，2，2，4
 rank() over(partition by item_third_cate_cd order by sales desc) rank;
+
 -- DENSE_RANK: 遇到并列的时候，不留空档序号，如1，2，2，3																			  
 dense_rank() over(partition by item_third_cate_cd order by sales desc) rank;
 
+-- NTILE(n): 将指定分区内的数据分成n份。作用是非常方便得提出符合某一tile的记录
+SELECT cookieid,createtime,pv,NTILE(3) OVER(PARTITION BY cookieid ORDER BY pv DESC) AS rn FROM lxw1234;
 
--- NTILE
+-- FIRST_VALUE(col,false), LAST_VALUE：找出分区中的第一个/最后一个值。第二个参数表示是否忽略null
+																  
 
--- FIRST_VALUE, LAST_VALUE
-
--- 
-                                                         
+-- SUM() OVER(): 排序后，到第n位的running total. 如果有并列，并列的行返回相同的计算结果。
+-- 同理，over() 前面还可以加AVG(),COUNT(),MIN(),MAX()
+select cookieid,site_id,createtime, pv,sum(pv) over(partition by cookieid order by createtime) from shawn_learnhive
+																			  
+-- window 子句
+select cookieid,createtime, pv,sum(pv) over w from shawn_learnhive WINDOW w as (PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+-- 计算到当前行，近3天的pv总和                                                  
 ----------------------------------------3.3. UDTF-------------------------------------------
