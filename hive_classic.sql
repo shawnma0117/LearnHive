@@ -188,6 +188,7 @@ insert overwrite table ads_inno.shawn_intel_global_imp partition (campaign='nov'
   where advertise_pin='OMD-Beijing' and dt>='2017-11-01' and dt<='2017-11-20' and (user_id !='' OR user_pin !='') and ad_plan_id in (108364794,108527561) and is_bill != '1'
 
 --REGEX Column Specification: 用正则表达式筛选列
+set hive.support.quoted.identifiers=none;
 SELECT `(ds|hr)?+.+` FROM sales     -- 除了ds, hr其他列都要
 																			  
 -------------------------------------------3、函数-------------------------------------------
