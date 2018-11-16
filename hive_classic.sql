@@ -1,6 +1,7 @@
 -----------------------------------------0、命令行工具-----------------------------------------
 use ads_inno;
 show tables;
+show tables like 'shawn_*'; -- 模糊搜索表
 show partitions ad.ad_base_impression partition(hour='00',pb='rtb');
 desc formatted tablename; -- 查看建表信息
 hive -e "xxxx" > ~/shawnma/nuts/nuts_ord.txt
@@ -9,6 +10,8 @@ dfs -ls path;  -- 查看hdfs路径
 dfs -lsr path; -- 递归查看
 dfs -du hdfs://BJYZH3-HD-JRJT-4137.jd.com:54310/user/jrjt/warehouse/stage.db/s_h02_click_log; --查看表文件大小
 dfs -get /user/jrjt/warehouse/ods.db/o_h02_click_log_i_new/dt=2014-01-21/000212_0 /home/jrjt/testan/; --下载文件到某个目录
+
+alter table tmp_h02_click_log_baitiao drop partition(dt='2014-03-01'); -- 删除分区
 
 -----------------------------------------1、建表,DDL,数据导入-------------------------------------------
 --【从hdfs导入】
