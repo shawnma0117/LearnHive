@@ -190,16 +190,20 @@ insert overwrite table ads_inno.shawn_intel_global_imp partition (campaign='nov'
   select user_pin,user_id,device_id,device_type,mobile_type,imp_id,impress_time,ad_plan_id,dt 
   where advertise_pin='OMD-Beijing' and dt>='2017-11-01' and dt<='2017-11-20' and (user_id !='' OR user_pin !='') and ad_plan_id in (108364794,108527561) and is_bill != '1'
 
---REGEX Column Specification: 用正则表达式筛选列
+-- 【REGEX Column Specification: 用正则表达式筛选列】
 set hive.support.quoted.identifiers=none;
 SELECT `(ds|hr)?+.+` FROM sales     -- 除了ds, hr其他列都要
+
+-- 【指定某几个字段分组，并在组内按照1个或多个值排序】
+select key1, key2, value1, value2, value3 from my_table distribute by key1,key2 sort by key1,key2,value2
+-- 注意：如果想要相同key被归到一起，必须把他们也写在sort by中
 																			  
 -------------------------------------------3、函数-------------------------------------------
 -- 添加UDF
 add jar /software/udf/UDFUnionAll.jar;
 create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 
------------------------------------------3.1.数学 -------------------------------------------																			  
+-----------------------------------------3.1.数学函数 -------------------------------------------																			  
 -- 随机抽样数据
 select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
 
@@ -212,14 +216,17 @@ select * from (select var, rand(123) as rd from table_a ) table_b where rd betwe
 注意：over()不会做任何aggregation，行数与原始table一致。
 function() over(partition by col order by col_val)  -- 指定分组字段
 function() over(order by col_val desc);   -- 省略partition，就不做分组
+
 -- ROW_NUMBER: 每一个行打一个递增行号，如1，2，3，4
 select
 	item_third_cate_cd,
 	item_third_cate_name,
 	sales,
-	row_number() over(partition by item_third_cate_cd order by sales desc) as rank
+	row_number() over(partition by item_third_cate_cd order by sales desc) as rank -- 每个三级品类下按照销量倒序排列
 from
 	gdm.gdm_m03_item_sku_da;
+
+select *, row_number() over(partition by 1) from shawn_learnhive -- 给所有数据加行号
 
 -- RANK: 遇到并列的时候，留空档序号，如1，2，2，4
 rank() over(partition by item_third_cate_cd order by sales desc) rank;
