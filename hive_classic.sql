@@ -1,4 +1,6 @@
------------------------------------------0、命令行工具-----------------------------------------
+------------------------------------------------------------------------------------------
+--###                               Part1：命令行工具                                 ###--
+-----------------------------------------------------------------------------------------
 use ads_inno;
 show tables;
 show tables like 'shawn_*'; -- 模糊搜索表
@@ -11,9 +13,12 @@ dfs -lsr path; -- 递归查看
 dfs -du hdfs://BJYZH3-HD-JRJT-4137.jd.com:54310/user/jrjt/warehouse/stage.db/s_h02_click_log; --查看表文件大小
 dfs -get /user/jrjt/warehouse/ods.db/o_h02_click_log_i_new/dt=2014-01-21/000212_0 /home/jrjt/testan/; --下载文件到某个目录
 
-alter table tmp_h02_click_log_baitiao drop partition(dt='2014-03-01'); -- 删除分区
 
------------------------------------------1、建表,DDL,数据导入-------------------------------------------
+
+------------------------------------------------------------------------------------------
+--###                           Part1：建表,DDL,数据导入                               ###--
+-----------------------------------------------------------------------------------------
+
 --【从hdfs导入】
 create table if not exists ads_inno.temp_nuts_pin
 (
@@ -91,7 +96,7 @@ create external table if not exists shawn_milka_clk_withpin
 row format delimited fields terminated by '\t' lines terminated by '\n'
 LOCATION 'hdfs://ns1018/user/jd_ad/ads_inno/ads_inno.db/shawn_milka_clk_withpin';
 
---【创建分区表】
+--【创建分区表，并使用动态分区插入】
 create table if not exists shawn_buffalo_test
 (
   user_pin string,
@@ -105,32 +110,50 @@ partitioned by (dt string)
 row format delimited fields terminated by '\t' 
 lines terminated by '\n';
 
+set hive.exec.dynamic.partition=true; -- 需要打开动态分区配置
+set hive.exec.dynamic.partition.mode=nonstrict;
+insert overwrite table shawn_buffalo_test partition (dt)
+select ..., dt from  xxx   -- 分区字段必须放在最后，动态分区是按照位置读取的
 
 --【创建ORC压缩表】
- CREATE TABLE if not exists daysOnHandTableWarehouse_sample (
-            dim_subd_num                   string      COMMENT     '分公司维编号',
-            dim_subd_name                  string      COMMENT     '分公司维名称',
-            dim_delv_center_name           string      COMMENT     '配送中心维名称',
-            delv_center_num                string      COMMENT     '配送中心编号',
-            item_sku_id                    string      COMMENT     '商品SKU编号'
-        )
-COMMENT '联合利华库存大表sample'
-PARTITIONED BY ( dt string )
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY '\t'
-stored as orc
-LOCATION 'hdfs://ns3/user/jd_ad/ads_polaris/daysOnHandTableWarehouse_sample';
+-- 相比textfile, orc表能实现70%的空间压缩，且因为是列式存储，读取效率更高
+CREATE EXTERNAL TABLE IF NOT EXISTS ads_inno.sony_mz_click_data_orc
+(
+    ad_plan_id bigint COMMENT '计划id',
+    advertise_pin string COMMENT '广告主pin',
+    advertiser_id bigint COMMENT '广告主id',
+    advertiser_type int COMMENT '广告主类型',
+    ad_spread_type int COMMENT '站内外类型',
+    merchant_id bigint,
+    k string COMMENT '秒针活动ID',
+    p string COMMENT '秒针点位ID',
+    click_time bigint COMMENT '点击时间',
+    device_type string COMMENT '设备类型',
+    device_id string COMMENT '设备id',
+    click_id string COMMENT '唯一点击标识'
+)
+PARTITIONED BY (dt string)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.ql.io.orc.OrcSerde'
+ WITH SERDEPROPERTIES (
+ 'field.delim'='\t','escape.delim'='\n',
+ 'serialization.null.format'=''
+ ) STORED AS orc;
 
 
 -- 【copy schema from existing table】
 create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
 
                                                                               
------------------------------------------2、Data Manipulation-------------------------------------------
+--------------------------------------------------------------------------------------
+--###                                  Part2：DML                                ###--
+--------------------------------------------------------------------------------------
 
 -- 【修改列名】只能一列一列来
 ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
 alter table shawn_mars CHANGE COLUMN idfa_md5 device_type INT;
+
+-- 【删除分区】
+alter table tmp_h02_click_log_baitiao drop partition(dt='2014-03-01'); 
 
 -- 【增加列】
 alter table shawn_qm_phone2pin_ext add columns(
@@ -144,11 +167,11 @@ is_related_brd smallint);
 insert overwrite table a
 select * from b distribute by user_pin,device_type sort by device_type asc,updatetime desc;
 
--- 删除符合某些条件的数据,用insert overwrite实现
+-- 【删除符合某些条件的数据】用insert overwrite实现
 insert overwrite table shawn_milka_imp_freq 
 select * from shawn_milka_imp_freq where pin !='';
 
--- 不退出hive环境，导出数据到本地文件系统 
+-- 【不退出hive环境，导出数据到本地文件系统】
 -- 但只能指定一个路径，无法指定名称。
 insert overwrite local directory '/home/wyp/wyp'
 ROW FORMAT DELIMITED FIELDS TERMINATED BY','
@@ -163,7 +186,7 @@ union all
 select user_pin,user_id,imp_id,campaign from ads_inno.shawn_intel_global_imp where user_pin not in ('','nobody')
 ) c group by campaign,user_pin
 
---【multi-insert】
+-- 【multi-insert】
 ----适用于：从同一个数据源，根据不同条件，插入到同个结果表的不同分区，或是不同表中。
 use ads_inno;
 create table if not EXISTS shawn_intel_global_imp (
@@ -198,21 +221,35 @@ SELECT `(ds|hr)?+.+` FROM sales     -- 除了ds, hr其他列都要
 select key1, key2, value1, value2, value3 from my_table distribute by key1,key2 sort by key1,key2,value2
 -- 注意：如果想要相同key被归到一起，必须把他们也写在sort by中
 																			  
--------------------------------------------3、函数-------------------------------------------
--- 添加UDF
+--------------------------------------------------------------------------------------
+--###                                 Part3：函数                                 ###--
+--------------------------------------------------------------------------------------
+
+--#.  添加UDF
 add jar /software/udf/UDFUnionAll.jar;
 create temporary function sysdate as 'com.jd.bi.hive.udf.SysDate';
 
------------------------------------------3.1.数学函数 -------------------------------------------																			  
+--#.  时间戳处理
+  
+from_unixtime(bigint unixtime[, string format]) -- 时间戳转格式日期 
+
+unix_timestamp(string date) -- 日期转时间戳  unix_timestamp('2009-03-20 11:30:01') = 1237573801
+unix_timestamp(string date, string pattern)
+
+--#.  数学函数 															  
 -- 随机抽样数据
+rand()
 select * from (select var, rand(123) as rd from table_a ) table_b where rd between 0.1 and 0.2;
 
-																			  
-																			  
+--#.  文本处理函数
+-- 包含字符串中是否包含某些子字符串														  
+key_word rlike '(精华|精华液|面部精华|小黑瓶|青春密码|青春密码酵素|欧莱雅面部精华|蔡徐坤青春密码|欧莱雅蔡徐坤|蔡徐坤小黑瓶)' 	
+
+-- 判断字段是否为空
+length(user_Log_acct) > 0 -- 比较巧妙的方法。相当于 user_log_acct is not null and user_log_acct != ''												  
 																			  
 
-----------------------------------------3.2.窗口分析-------------------------------------------
-作用是能够做移动窗口的分析，比如三天内下单金额的平均值。 
+--#.  窗口分析函数
 注意：over()不会做任何aggregation，行数与原始table一致。
 function() over(partition by col order by col_val)  -- 指定分组字段
 function() over(order by col_val desc);   -- 省略partition，就不做分组
@@ -228,7 +265,7 @@ from
 
 select *, row_number() over(partition by 1) from shawn_learnhive -- 给所有数据加行号
 
--- RANK: 遇到并列的时候，留空档序号，如1，2，2，4
+-- RANK(): 遇到并列的时候，留空档序号，如1，2，2，4
 rank() over(partition by item_third_cate_cd order by sales desc) rank;
 
 -- DENSE_RANK: 遇到并列的时候，不留空档序号，如1，2，2，3																			  
@@ -238,13 +275,31 @@ dense_rank() over(partition by item_third_cate_cd order by sales desc) rank;
 SELECT cookieid,createtime,pv,NTILE(3) OVER(PARTITION BY cookieid ORDER BY pv DESC) AS rn FROM lxw1234;
 
 -- FIRST_VALUE(col,false), LAST_VALUE：找出分区中的第一个/最后一个值。第二个参数表示是否忽略null
-																  
+select distinct a.* from (select cookieid,first_value(createtime) over(partition by cookieid order by pv) from shawn_learnhive) a
+-- 窗口函数返回的结果与原表行数相同，如果想去掉多余数据，需要加一个subquery来group by，不可在原始query上执行，否则会报错													  
 
--- SUM() OVER(): 排序后，到第n位的running total. 如果有并列，并列的行返回相同的计算结果。
--- 同理，over() 前面还可以加AVG(),COUNT(),MIN(),MAX()
+-- SUM(), AVG(),COUNT(),MIN(),MAX() 与窗口分析结合
+SUM(a) OVER(PARTITION BY b ORDER BY c desc) -- 排序后，到当前行的running total. 如果有并列行，返回相同结果。
+SUM(a) OVER(PARTITION BY b)                 -- 无排序的情况下，结果是计算每个分组的总和，每行结果相同。
 select cookieid,site_id,createtime, pv,sum(pv) over(partition by cookieid order by createtime) from shawn_learnhive
 																			  
--- window 子句
+-- WINDOW 子句语法
 select cookieid,createtime, pv,sum(pv) over w from shawn_learnhive WINDOW w as (PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
--- 计算到当前行，近3天的pv总和                                                  
-----------------------------------------3.3. UDTF-------------------------------------------
+-- 计算到当前行，近3天的pv总和
+
+-- ROLLUP: 维度由粗到细聚合，可以做上卷分析
+select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with ROLLUP
+-- GROUPING_SETS: 按照指定维度组合进行聚合，
+select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with GROUPING_SETS(dim_1,dim_2,(dim_1,dim_2))
+-- CUBE: 根据group by的所有维度的组合进行聚合
+select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with CUBE ORDER BY GROUPING__ID
+
+
+--#.  行列转换
+
+-- 将一列多行转为一行多列. aka：long format --> wide format
+-- collect_set
+select id_var,value_var[0],value_var[1] 
+from (
+select id_var,collect_set(value_var) as value_var from table_a group by id_var
+) a;
