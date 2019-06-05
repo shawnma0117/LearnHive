@@ -279,9 +279,13 @@ select distinct a.* from (select cookieid,first_value(createtime) over(partition
 -- 窗口函数返回的结果与原表行数相同，如果想去掉多余数据，需要加一个subquery来group by，不可在原始query上执行，否则会报错													  
 
 -- SUM(), AVG(),COUNT(),MIN(),MAX() 与窗口分析结合
-SUM(a) OVER(PARTITION BY b ORDER BY c desc) -- 排序后，到当前行的running total. 如果有并列行，返回相同结果。
-SUM(a) OVER(PARTITION BY b)                 -- 无排序的情况下，结果是计算每个分组的总和，每行结果相同。
-select cookieid,site_id,createtime, pv,sum(pv) over(partition by cookieid order by createtime) from shawn_learnhive
+SUM(a) OVER(PARTITION BY b ORDER BY c desc) -- 排序后，到当前行的running total. 如果有并列行，返回相同结果。使用场景：计算累计和。
+SUM(a) OVER(PARTITION BY b ORDER BY c desc ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) --和前一种写法等效。
+SUM(a) OVER(PARTITION BY b)                 -- 无排序的情况下，结果是计算每个分组的总和，同个分组内每行结果相同。使用场景：计算每个种类的占比。
+SUM(pv) OVER(PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 3 PRECEDING AND CURRENT ROW) AS pv4, --当前行+往前3行
+SUM(pv) OVER(PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 3 PRECEDING AND 1 FOLLOWING) AS pv5, --当前行+往前3行+往后1行
+SUM(pv) OVER(PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS pv6 ---当前行+往后所有行
+
 																			  
 -- WINDOW 子句语法
 select cookieid,createtime, pv,sum(pv) over w from shawn_learnhive WINDOW w as (PARTITION BY cookieid ORDER BY createtime ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
