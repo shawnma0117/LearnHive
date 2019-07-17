@@ -229,6 +229,45 @@ SELECT `(ds|hr)?+.+` FROM sales     -- 除了ds, hr其他列都要
 -- 【指定某几个字段分组，并在组内按照1个或多个值排序】
 select key1, key2, value1, value2, value3 from my_table distribute by key1,key2 sort by key1,key2,value2
 -- 注意：如果想要相同key被归到一起，必须把他们也写在sort by中
+									      
+-- 【COMMON TABLE EXPRESSION】
+-- 如果有多个不同query要从同一份中间数据计算，可以用CTE先把中间结果定义出来，后续多次引用，省代码量。
+with q1 as ( select key from src where key = '5')
+select *
+from q1;
+ 
+-- from style
+with q1 as (select * from src where key= '5')
+from q1
+select *;
+  
+-- chaining CTEs
+with q1 as ( select key from q2 where key = '5'),
+q2 as ( select key from src where key = '5')
+select * from (select key from q1) a;
+  
+-- union example
+with q1 as (select * from src where key= '5'),
+q2 as (select * from src s2 where key = '4')
+select * from q1 union all select * from q2;
+
+-- insert example
+create table s1 like src;
+with q1 as ( select key, value from src where key = '5')
+from q1
+insert overwrite table s1
+select *;
+ 
+-- ctas example
+create table s2 as
+with q1 as ( select key from src where key = '4')
+select * from q1;
+ 
+-- view example
+create view v1 as
+with q1 as ( select key from src where key = '5')
+select * from q1;
+select * from v1;									      
 																			  
 --------------------------------------------------------------------------------------
 --###                                 Part3：函数                                 ###--
