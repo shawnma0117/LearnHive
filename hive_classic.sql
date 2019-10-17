@@ -342,7 +342,7 @@ select cookieid,createtime, pv,sum(pv) over w from shawn_learnhive WINDOW w as (
 -- ROLLUP: 维度由粗到细聚合，可以做上卷分析
 select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with ROLLUP
 -- GROUPING_SETS: 按照指定维度组合进行聚合，
-select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with GROUPING_SETS(dim_1,dim_2,(dim_1,dim_2))
+select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 GROUPING SETS(dim_1,dim_2,(dim_1,dim_2))
 -- CUBE: 根据group by的所有维度的组合进行聚合
 select dim_1, dim_2, count(distinct value), GROUPING__ID from table_a group by dim_1,dim_2 with CUBE ORDER BY GROUPING__ID
 
