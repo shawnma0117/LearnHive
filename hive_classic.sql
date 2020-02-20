@@ -300,7 +300,8 @@ length(user_Log_acct) > 0 -- 比较巧妙的方法。相当于 user_log_acct is 
 --#.  窗口分析函数
 注意：over()不会做任何aggregation，行数与原始table一致。
 function() over(partition by col order by col_val)  -- 指定分组字段
-function() over(order by col_val desc);   -- 省略partition，就不做分组
+function() over(order by col_val desc);   -- 省略partition，就不做分组。
+function() over(partition by 1);    -- 不根据任何字段分区，即计算总体			      
 
 -- ROW_NUMBER: 每一个行打一个递增行号，如1，2，3，4
 select
@@ -322,9 +323,11 @@ dense_rank() over(partition by item_third_cate_cd order by sales desc) rank;
 -- NTILE(n): 将指定分区内的数据分成n份。作用是非常方便得提出符合某一tile的记录
 SELECT cookieid,createtime,pv,NTILE(3) OVER(PARTITION BY cookieid ORDER BY pv DESC) AS rn FROM lxw1234;
 
--- FIRST_VALUE(col,false), LAST_VALUE：找出分区中的第一个/最后一个值。第二个参数表示是否忽略null
+-- FIRST_VALUE(col,false)
+-- LAST_VALUE：取分组内排序后，截止到当前行，最后一个值第一个/最后一个值。第二个参数表示是否忽略null。
+-- 注意1：是截止当前行！！！如果正序排列，取last_value,那么每一行的结果都会不同。永远取不到最大值。
 select distinct a.* from (select cookieid,first_value(createtime) over(partition by cookieid order by pv) from shawn_learnhive) a
--- 窗口函数返回的结果与原表行数相同，如果想去掉多余数据，需要加一个subquery来group by，不可在原始query上执行，否则会报错													  
+-- 注意2：窗口函数返回的结果与原表行数相同，如果想去掉多余数据，需要加一个subquery来group by，不可在原始query上执行，否则会报错													  
 
 -- SUM(), AVG(),COUNT(),MIN(),MAX() 与窗口分析结合
 SUM(a) OVER(PARTITION BY b ORDER BY c desc) -- 排序后，到当前行的running total. 如果有并列行，返回相同结果。使用场景：计算累计和。
