@@ -18,6 +18,7 @@ dfs -get /user/jrjt/warehouse/ods.db/o_h02_click_log_i_new/dt=2014-01-21/000212_
 -----------------------------------------------------------------------------------------
 SET hive.exec.parallel
 SET hive.groupby.orderby.position.alias=false;
+set hive.mapred.mode=unstrict;  -- 改为非严格模式。严格模式下，用户order by不加limit；没有使用分区字段；使用了笛卡尔积会报错
 
 
 
