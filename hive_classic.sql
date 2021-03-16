@@ -158,6 +158,9 @@ create table ads_inno.tmp_lux_idfamd5 like ads_inno.tmp_3c_idfamd5
 --###                                  Part2：DML                                ###--
 --------------------------------------------------------------------------------------
 
+-- 【删表】
+drop table if exists iot_devicelocation;
+
 -- 【修改列名】只能一列一列来
 ALTER TABLE table_name CHANGE [COLUMN] col_old_name col_new_name column_type [COMMENT col_comment] [FIRST|AFTER column_name]
 alter table shawn_mars CHANGE COLUMN idfa_md5 device_type INT;
